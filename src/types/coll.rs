@@ -120,11 +120,7 @@ fn collect_gltf_geom(
 ) {
     let xform = parent_xform * Mat4::from_cols_array_2d(&node.transform().matrix());
 
-    let is_coll = node
-        .name()
-        .is_some_and(|n| n.ends_with("-colonly") || n.ends_with("-col"));
-
-    if is_coll && let Some(mesh) = node.mesh() {
+    if let Some(mesh) = node.mesh() {
         for prim in mesh.primitives() {
             let mode = prim.mode();
             if !matches!(
