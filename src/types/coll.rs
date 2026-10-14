@@ -5,12 +5,21 @@ use std::io::Write;
 use std::path::Path;
 
 const SIGNATURE: &[u8; 16] = b"GoBox Collision\n";
-const VERSION: u32 = 2;
+const VERSION: u32 = 3;
+const TOOL_MINIMUM_VERSION: u32 = 3;
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CollType {
+    Convex = 0,
+    Concave = 1,
+}
 
 pub struct Coll {
     pub signature: [u8; 16],
     pub version: u32,
-    pub num_tris: u32,
+    pub coll_type: CollType,
+    pub num_verts: u32,
     pub vbuf: Vec<f32>,
 }
 
@@ -19,7 +28,8 @@ impl Default for Coll {
         Self {
             signature: *SIGNATURE,
             version: VERSION,
-            num_tris: 0,
+            coll_type: CollType::Convex,
+            num_verts: 0,
             vbuf: vec![],
         }
     }
@@ -41,7 +51,8 @@ impl Coll {
     pub fn serialize<W: Write>(&self, w: &mut W) -> std::io::Result<()> {
         w.write_all(&self.signature)?;
         w.write_all(&self.version.to_le_bytes())?;
-        w.write_all(&self.num_tris.to_le_bytes())?;
+        w.write_all(&(self.coll_type as i32).to_le_bytes())?;
+        w.write_all(&self.num_verts.to_le_bytes())?;
         for f in &self.vbuf {
             w.write_all(&f.to_le_bytes())?;
         }
@@ -59,16 +70,25 @@ impl Coll {
         r.read_exact(&mut word)?;
         let version = u32::from_le_bytes(word);
         if version < VERSION {
-            panic!("File too old. Use older tool. (File={version}, Tool={VERSION})")
+            panic!(
+                "File too old. Use older tool. (File={version}, Tool Minimum={TOOL_MINIMUM_VERSION})"
+            )
         } else if version > VERSION {
             panic!("File too new. Update your tool. (File={version}, Tool={VERSION})")
         }
 
         r.read_exact(&mut word)?;
-        let num_tris = u32::from_le_bytes(word);
+        let coll_type: CollType = match i32::from_le_bytes(word) {
+            x if x == CollType::Convex as i32 => CollType::Convex,
+            x if x == CollType::Concave as i32 => CollType::Concave,
+            _ => panic!("Unknown coll type."),
+        };
 
-        let count = (num_tris as usize)
-            .checked_mul(9)
+        r.read_exact(&mut word)?;
+        let num_verts = u32::from_le_bytes(word);
+
+        let count = (num_verts as usize)
+            .checked_mul(3)
             .expect("Triangle count isn't a multiple of 9");
 
         let mut vbuf = Vec::new();
@@ -80,12 +100,13 @@ impl Coll {
         Ok(Self {
             signature,
             version,
-            num_tris,
+            coll_type,
+            num_verts,
             vbuf,
         })
     }
 
-    pub fn from_gltf<P: AsRef<Path>>(path: P) -> Self {
+    pub fn from_gltf<P: AsRef<Path>>(path: P, coll_type: CollType) -> Self {
         let path = path.as_ref();
         let gltf::Gltf { document, blob } = gltf::Gltf::open(path).unwrap();
 
@@ -101,12 +122,15 @@ impl Coll {
             collect_gltf_geom(node, &Mat4::IDENTITY, &buffers, &mut vbuf);
         }
 
-        let num_tris = u32::try_from(vbuf.len() / 9).expect("triangles overflow");
+        // TODO: remove dupe and unnecessary vertices if type is convex
+
+        let num_verts = u32::try_from(vbuf.len() / 3).expect("vertices overflow");
 
         Self {
             signature: *SIGNATURE,
             version: VERSION,
-            num_tris,
+            coll_type,
+            num_verts,
             vbuf,
         }
     }
