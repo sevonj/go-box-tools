@@ -15,6 +15,7 @@ pub enum CollType {
     Concave = 1,
 }
 
+#[derive(Debug)]
 pub struct Coll {
     pub signature: [u8; 16],
     pub version: u32,
@@ -23,8 +24,10 @@ pub struct Coll {
     pub vbuf: Vec<f32>,
 }
 
-impl Default for Coll {
-    fn default() -> Self {
+impl Coll {
+    pub const FILE_EXT: &'static str = "coll";
+
+    pub fn new_convex() -> Self {
         Self {
             signature: *SIGNATURE,
             version: VERSION,
@@ -33,10 +36,16 @@ impl Default for Coll {
             vbuf: vec![],
         }
     }
-}
 
-impl Coll {
-    pub const FILE_EXT: &'static str = "coll";
+    pub fn new_concave() -> Self {
+        Self {
+            signature: *SIGNATURE,
+            version: VERSION,
+            coll_type: CollType::Concave,
+            num_verts: 0,
+            vbuf: vec![],
+        }
+    }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(24 + self.vbuf.len() * 4);
