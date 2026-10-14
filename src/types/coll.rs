@@ -146,7 +146,13 @@ fn collect_gltf_geom(
             // NOTICE: apparently godot and gltf use opposite windings.
             match mode {
                 gltf::mesh::Mode::Triangles => {
-                    tris.extend(indices.chunks_exact(3).map(|c| [c[1], c[0], c[2]]));
+                    tris.extend(
+                        indices
+                            .as_chunks::<3>()
+                            .0
+                            .iter()
+                            .map(|c| [c[1], c[0], c[2]]),
+                    );
                 }
                 gltf::mesh::Mode::TriangleStrip => {
                     for i in 0..indices.len() - 2 {
